@@ -474,3 +474,8 @@ footer {
   background: var(--card);
   border-color: var(--border);
 }
+
+[data-slot="card"], [data-slot="alert"], [data-slot="button"][data-variant="outline"] {
+  border-color: var(--border);
+}
+
