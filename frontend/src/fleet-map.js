@@ -7,7 +7,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 
 setWorkerUrl(WorkerUrl);
 export const center = [34.0837, 74.7973];
-const style = "https://tiles.openfreemap.org/styles/liberty";
+const style = "https://tiles.openfreemap.org/styles/dark";
 export function createFleetMap(node, onStatus) {
   const map = L.map(node, { zoomControl: false }).setView(center, 12);
   L.control.zoom({ position: "bottomright" }).addTo(map);

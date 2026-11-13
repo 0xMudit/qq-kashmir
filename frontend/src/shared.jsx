@@ -1,3 +1,4 @@
+import { Radar } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,7 +28,7 @@ import { toast } from "sonner";
 export const brand = {
   name: "Kashmir",
   mark: "K",
-  dark: false,
+  dark: true,
   heading: "See where your fleet is now.",
   description:
     "Connect vehicles, follow their latest positions, and inspect route history.",
@@ -245,7 +246,7 @@ function Login({ onLogin }) {
         <a href="/lab">System design lab ↗</a>
       </aside>
       <section>
-        <Card className="w-full max-w-md">
+        <Card className="w-full max-w-sm">
           <CardHeader>
             <CardTitle className="text-2xl">
               {register ? "Create an account" : "Sign in"}
@@ -316,7 +317,10 @@ function Login({ onLogin }) {
 export function Brand() {
   return (
     <div className="brand">
-      <span>{brand.mark}</span> QQ {brand.name}
+      <span aria-hidden="true">
+        <Radar />
+      </span>{" "}
+      QQ {brand.name}
     </div>
   );
 }

@@ -237,6 +237,7 @@ function Fleet() {
     <>
       <div className="page-heading">
         <div>
+          <span className="product-context">Fleet operations</span>
           <h1>Fleet tracking</h1>
           <p className="text-muted-foreground">
             Follow vehicles and recent routes.

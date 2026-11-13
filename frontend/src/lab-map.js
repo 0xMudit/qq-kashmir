@@ -3,7 +3,7 @@ export function mountLabMap(node) {
   const status = document.createElement("p");
   status.setAttribute("role", "status");
   node.before(status);
-  node.style.background = "#e4eef0";
+  node.style.background = "#0e2527";
   const { map, destroy } = createFleetMap(node, (message) => {
     status.textContent = message;
   });
