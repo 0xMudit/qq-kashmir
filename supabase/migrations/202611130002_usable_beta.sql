@@ -1,0 +1,13 @@
+SET search_path TO qq_kashmir;
+
+CREATE TABLE IF NOT EXISTS beta_users (id TEXT PRIMARY KEY, username TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, created DOUBLE PRECISION NOT NULL);
+CREATE TABLE IF NOT EXISTS beta_sessions (digest TEXT PRIMARY KEY, owner TEXT NOT NULL REFERENCES beta_users(id), expires DOUBLE PRECISION NOT NULL, label TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS beta_sessions_owner ON beta_sessions(owner);
+CREATE TABLE IF NOT EXISTS beta_limits (key TEXT PRIMARY KEY, count INTEGER NOT NULL, expires DOUBLE PRECISION NOT NULL)
+;
+
+CREATE TABLE IF NOT EXISTS beta_vehicles (id TEXT PRIMARY KEY, owner TEXT NOT NULL REFERENCES beta_users(id), label TEXT NOT NULL, plate TEXT NOT NULL, device_digest TEXT UNIQUE, state TEXT NOT NULL, seq BIGINT NOT NULL DEFAULT -1, lat DOUBLE PRECISION, lon DOUBLE PRECISION, speed DOUBLE PRECISION, seen DOUBLE PRECISION, created DOUBLE PRECISION NOT NULL);
+CREATE INDEX IF NOT EXISTS beta_vehicles_owner ON beta_vehicles(owner,state);
+CREATE TABLE IF NOT EXISTS beta_history (id TEXT PRIMARY KEY, vehicle TEXT NOT NULL REFERENCES beta_vehicles(id), seq BIGINT NOT NULL, lat DOUBLE PRECISION NOT NULL, lon DOUBLE PRECISION NOT NULL, speed DOUBLE PRECISION NOT NULL, received DOUBLE PRECISION NOT NULL, UNIQUE(vehicle,seq));
+CREATE INDEX IF NOT EXISTS beta_history_vehicle ON beta_history(vehicle,received)
+;
