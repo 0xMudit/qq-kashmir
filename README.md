@@ -37,3 +37,7 @@ Open an issue describing the behavior and reproduction. Submit focused pull requ
 ## Live demo
 
 Run `python simulate.py` with API_KEY set, open http://localhost:8000, and enter the same key. A synthetic bike moves around Srinagar. The map refreshes every two seconds and requires internet for map tiles.
+
+## Project planning
+
+Track planned work in [GitHub Issues](https://github.com/0xMudit/qq-kashmir/issues). This beta favors a small auditable implementation; the roadmap records what is required before broader deployment.
