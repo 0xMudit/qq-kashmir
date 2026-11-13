@@ -147,7 +147,10 @@ def demo_run():
             "Older location update rejected" if not stale["accepted"] else "FAILED",
             "Coordinates validated before ingestion",
         ],
-        "record": {"vehicles": positions(), "stale_update_accepted": stale["accepted"]},
+        "record": {
+            "vehicles": demo_fleet(),
+            "stale_update_accepted": stale["accepted"],
+        },
     }
 
 

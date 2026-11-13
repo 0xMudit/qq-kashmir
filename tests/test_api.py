@@ -68,3 +68,17 @@ def test_animation_assets():
     with TestClient(app.app) as c:
         assert c.get("/assets/demo.js").status_code == 200
         assert c.get("/assets/demo.css").status_code == 200
+
+
+def test_public_demo_excludes_operator_vehicles():
+    with TestClient(app.app) as c:
+        c.post(
+            "/positions",
+            headers=H,
+            json={"vehicle": "private-bike", "seq": 1, "lat": 1, "lon": 1},
+        )
+        result = c.post("/demo/run").json()
+        assert len(result["record"]["vehicles"]) == 5
+        assert all(
+            v["vehicle"].startswith("demo-bike-") for v in result["record"]["vehicles"]
+        )
