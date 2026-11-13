@@ -3,20 +3,25 @@
 import secrets
 import time
 import uuid
+from typing import Literal
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from accounts import digest
 
 SCHEMA = """
-CREATE TABLE IF NOT EXISTS beta_vehicles (id TEXT PRIMARY KEY, owner TEXT NOT NULL REFERENCES beta_users(id), label TEXT NOT NULL, plate TEXT NOT NULL, device_digest TEXT UNIQUE, state TEXT NOT NULL, seq BIGINT NOT NULL DEFAULT -1, lat DOUBLE PRECISION, lon DOUBLE PRECISION, speed DOUBLE PRECISION, seen DOUBLE PRECISION, created DOUBLE PRECISION NOT NULL);
+CREATE TABLE IF NOT EXISTS beta_vehicles (id TEXT PRIMARY KEY, owner TEXT NOT NULL REFERENCES beta_users(id), label TEXT NOT NULL, plate TEXT NOT NULL, vehicle_type TEXT NOT NULL DEFAULT 'car' CHECK(vehicle_type IN ('car','truck','bus')), device_digest TEXT UNIQUE, state TEXT NOT NULL, seq BIGINT NOT NULL DEFAULT -1, lat DOUBLE PRECISION, lon DOUBLE PRECISION, speed DOUBLE PRECISION, seen DOUBLE PRECISION, created DOUBLE PRECISION NOT NULL);
 CREATE INDEX IF NOT EXISTS beta_vehicles_owner ON beta_vehicles(owner,state);
 CREATE TABLE IF NOT EXISTS beta_history (id TEXT PRIMARY KEY, vehicle TEXT NOT NULL REFERENCES beta_vehicles(id), seq BIGINT NOT NULL, lat DOUBLE PRECISION NOT NULL, lon DOUBLE PRECISION NOT NULL, speed DOUBLE PRECISION NOT NULL, received DOUBLE PRECISION NOT NULL, UNIQUE(vehicle,seq));
 CREATE INDEX IF NOT EXISTS beta_history_vehicle ON beta_history(vehicle,received)
 """
 
 
-class Vehicle(BaseModel):
+class VehicleType(BaseModel):
+    vehicle_type: Literal["car", "truck", "bus"] = "car"
+
+
+class Vehicle(VehicleType):
     label: str = Field(min_length=1, max_length=80)
     plate: str = Field(default="", max_length=24)
 
@@ -40,6 +45,16 @@ class Product:
             for statement in SCHEMA.split(";"):
                 if statement.strip():
                     db.execute(text(statement))
+            if self.engine.dialect.name == "sqlite":
+                columns = db.execute(
+                    text("PRAGMA table_info(beta_vehicles)")
+                ).mappings()
+                if not any(column["name"] == "vehicle_type" for column in columns):
+                    db.execute(
+                        text(
+                            "ALTER TABLE beta_vehicles ADD COLUMN vehicle_type TEXT NOT NULL DEFAULT 'car' CHECK(vehicle_type IN ('car','truck','bus'))"
+                        )
+                    )
 
     def ingest(self, identifier, body):
         now = time.time()
@@ -92,7 +107,7 @@ class Product:
                     dict(r)
                     for r in db.execute(
                         text(
-                            "SELECT id,label,plate,seq,lat,lon,speed,seen,created FROM beta_vehicles WHERE owner=:owner AND state='active' ORDER BY created DESC LIMIT 50"
+                            "SELECT id,label,plate,vehicle_type,seq,lat,lon,speed,seen,created FROM beta_vehicles WHERE owner=:owner AND state='active' ORDER BY created DESC LIMIT 50"
                         ),
                         {"owner": user["id"]},
                     ).mappings()
@@ -126,13 +141,14 @@ class Product:
                     raise HTTPException(409, "Beta workspace limit: 50 active vehicles")
                 db.execute(
                     text(
-                        "INSERT INTO beta_vehicles(id,owner,label,plate,device_digest,state,created) VALUES(:id,:owner,:label,:plate,:digest,'active',:created)"
+                        "INSERT INTO beta_vehicles(id,owner,label,plate,vehicle_type,device_digest,state,created) VALUES(:id,:owner,:label,:plate,:vehicle_type,:digest,'active',:created)"
                     ),
                     {
                         "id": identifier,
                         "owner": user["id"],
                         "label": body.label,
                         "plate": body.plate,
+                        "vehicle_type": body.vehicle_type,
                         "digest": digest(token),
                         "created": time.time(),
                     },
@@ -142,6 +158,21 @@ class Product:
                 "device_token": token,
                 "notice": "Copy this device token now. It can only submit telemetry for this vehicle.",
             }
+
+        @router.patch("/vehicles/{identifier}/type")
+        def update_vehicle_type(
+            identifier: str, body: VehicleType, user=Depends(current)
+        ):
+            with self.engine.begin() as db:
+                updated = db.execute(
+                    text(
+                        "UPDATE beta_vehicles SET vehicle_type=:type WHERE id=:id AND owner=:owner AND state='active' RETURNING vehicle_type"
+                    ),
+                    {"type": body.vehicle_type, "id": identifier, "owner": user["id"]},
+                ).scalar_one_or_none()
+            if updated is None:
+                raise HTTPException(404, "Vehicle not found")
+            return {"vehicle_type": updated}
 
         @router.post("/vehicles/{identifier}/token")
         def rotate(identifier: str, user=Depends(current)):

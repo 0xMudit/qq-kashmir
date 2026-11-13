@@ -149,3 +149,27 @@ def test_archived_device_rejected(client):
         == 401
     )
     assert client.get("/api/vehicles").json() == []
+
+
+def test_vehicle_type_defaults_validates_and_stays_owner_scoped(client):
+    signup(client)
+    assert (
+        client.post(
+            "/api/vehicles", json={"label": "Invalid", "vehicle_type": "plane"}
+        ).status_code
+        == 422
+    )
+    car = client.post("/api/vehicles", json={"label": "Car"}).json()
+    truck = client.post(
+        "/api/vehicles", json={"label": "Truck", "vehicle_type": "truck"}
+    ).json()
+    rows = {
+        row["id"]: row["vehicle_type"] for row in client.get("/api/vehicles").json()
+    }
+    assert rows == {car["id"]: "car", truck["id"]: "truck"}
+    route = "/api/vehicles/" + car["id"] + "/type"
+    assert client.patch(route, json={"vehicle_type": "bus"}).json() == {
+        "vehicle_type": "bus"
+    }
+    other_user(client)
+    assert client.patch(route, json={"vehicle_type": "car"}).status_code == 404

@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   Shell,
   Field,
+  Choice,
   Modal,
   Secret,
   Notice,
@@ -17,6 +18,7 @@ import {
   useRecords,
 } from "./shared";
 import { center, createFleetMap, L } from "./fleet-map";
+import { travelHeading, vehicleIcon, vehicleTypes } from "./vehicle-markers";
 import { toast } from "sonner";
 
 function FleetMap({ vehicles, selected, points, onSelect }) {
@@ -43,30 +45,46 @@ function FleetMap({ vehicles, selected, points, onSelect }) {
     const active = new Set(
       vehicles.filter((v) => v.lat !== null).map((v) => v.id),
     );
-    for (const [id, marker] of markers.current)
+    for (const [id, entry] of markers.current)
       if (!active.has(id)) {
-        marker.remove();
+        entry.marker.remove();
         markers.current.delete(id);
       }
     for (const vehicle of vehicles) {
       if (vehicle.lat === null) continue;
-      let marker = markers.current.get(vehicle.id);
-      if (!marker) {
-        marker = L.circleMarker([vehicle.lat, vehicle.lon], {
-          radius: 8,
-          fillColor: "#168b85",
-          fillOpacity: 1,
-          color: "#fff",
-          weight: 3,
+      const position = L.latLng(vehicle.lat, vehicle.lon);
+      const isSelected = vehicle.id === selected?.id;
+      const entry = markers.current.get(vehicle.id);
+      const heading = entry
+        ? travelHeading(entry.marker.getLatLng(), position, entry.heading)
+        : 0;
+      const appearance = [
+        vehicle.vehicle_type,
+        isSelected,
+        vehicle.online,
+        heading,
+      ].join(":");
+      const options = { selected: isSelected, online: vehicle.online, heading };
+      if (entry) {
+        entry.marker.setLatLng(position);
+        if (entry.appearance !== appearance) {
+          entry.marker.setIcon(vehicleIcon(vehicle.vehicle_type, options));
+          entry.marker.setZIndexOffset(isSelected ? 1000 : 0);
+          entry.appearance = appearance;
+        }
+        entry.heading = heading;
+      } else {
+        const marker = L.marker(position, {
+          icon: vehicleIcon(vehicle.vehicle_type, options),
+          zIndexOffset: isSelected ? 1000 : 0,
+          alt: vehicle.label,
+          title: vehicle.label,
         }).addTo(map);
         const label = document.createElement("span");
         label.textContent = vehicle.label;
         marker.bindTooltip(label).on("click", () => onSelect(vehicle.id));
-        markers.current.set(vehicle.id, marker);
+        markers.current.set(vehicle.id, { marker, heading, appearance });
       }
-      marker
-        .setLatLng([vehicle.lat, vehicle.lon])
-        .setRadius(vehicle.id === selected?.id ? 11 : 8);
     }
   }, [vehicles, selected?.id, onSelect]);
   useEffect(() => {
@@ -109,6 +127,7 @@ function Fleet() {
     [secret, setSecret] = useState(""),
     [busy, setBusy] = useState(false),
     [running, setRunning] = useState(false);
+  const [vehicleType, setVehicleType] = useState("car");
   const simulation = useRef(null),
     active = useRef(true);
   const selected = rows.find((v) => v.id === id);
@@ -142,7 +161,10 @@ function Fleet() {
   }, [id]);
   function create(event) {
     event.preventDefault();
-    const data = Object.fromEntries(new FormData(event.currentTarget));
+    const data = {
+      ...Object.fromEntries(new FormData(event.currentTarget)),
+      vehicle_type: vehicleType,
+    };
     setBusy(true);
     action(async () => {
       try {
@@ -184,7 +206,8 @@ function Fleet() {
     action(async () => {
       try {
         const vehicle = await post("/vehicles", {
-          label: "Sample delivery bike",
+          label: "Sample delivery truck",
+          vehicle_type: "truck",
           plate: "SAMPLE",
         });
         await post("/vehicles/" + vehicle.id + "/location", {
@@ -243,7 +266,14 @@ function Fleet() {
             Follow vehicles and recent routes.
           </p>
         </div>
-        <Button onClick={() => setModal("vehicle")}>Add vehicle</Button>
+        <Button
+          onClick={() => {
+            setVehicleType("car");
+            setModal("vehicle");
+          }}
+        >
+          Add vehicle
+        </Button>
       </div>
       <Notice>{error}</Notice>
       <div className="fleet-layout">
@@ -274,7 +304,10 @@ function Fleet() {
                   <span>
                     {v.label}
                     <small className="block text-muted-foreground">
-                      {v.plate || "No plate"}
+                      {vehicleTypes.find(
+                        ([key]) => key === v.vehicle_type,
+                      )?.[1] || "Car"}{" "}
+                      · {v.plate || "No plate"}
                     </small>
                   </span>
                   <Status>{v.online ? "Online" : "Offline"}</Status>
@@ -308,6 +341,15 @@ function Fleet() {
                   {date(selected.seen)} · {points.length} recent points
                 </p>
                 <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setVehicleType(selected.vehicle_type ?? "car");
+                      setModal("type");
+                    }}
+                  >
+                    Change vehicle type
+                  </Button>
                   <Button onClick={() => setModal("location")}>
                     Send GPS update
                   </Button>
@@ -361,8 +403,48 @@ function Fleet() {
             label="Plate or reference"
             maxLength={24}
           />
+          <Choice
+            label="Vehicle type"
+            value={vehicleType}
+            onChange={setVehicleType}
+            options={vehicleTypes}
+          />
           <Button disabled={busy}>Create vehicle</Button>
         </form>
+      </Modal>
+      <Modal
+        open={modal === "type" && Boolean(selected)}
+        onOpenChange={(open) => {
+          if (!open) setModal("");
+        }}
+        title="Change vehicle type"
+        description="Choose the icon shown on the fleet map."
+      >
+        <Choice
+          label="Vehicle type"
+          value={vehicleType}
+          onChange={setVehicleType}
+          options={vehicleTypes}
+        />
+        <Button
+          disabled={busy}
+          onClick={() =>
+            action(async () => {
+              setBusy(true);
+              try {
+                await api("/vehicles/" + id + "/type", "PATCH", {
+                  vehicle_type: vehicleType,
+                });
+                setModal("");
+                await refresh();
+              } finally {
+                setBusy(false);
+              }
+            })
+          }
+        >
+          Save vehicle type
+        </Button>
       </Modal>
       <Modal
         open={modal === "location" && Boolean(selected)}
